@@ -120,6 +120,13 @@
             <small class="form-text text-muted">Use text for the service URL rather than the service number.</small>
         </div>
     </div>
+    <div class="form-group row">
+        <label for="service_failure_threshold" class="col-sm-4 col-form-label">Failure Threshold</label>
+        <div class="col-8 mt-1">
+            <input type="number" name="failure_threshold" class="form-control" value="{{.FailureThreshold}}" placeholder="0" id="service_failure_threshold" min="0">
+            <small class="form-text text-muted">Will not notify until this many failures occur. 0 will notify immediately.</small>
+        </div>
+    </div>
     <div class="form-group row d-none">
         <label for="order" class="col-sm-4 col-form-label">List Order</label>
         <div class="col-sm-8">

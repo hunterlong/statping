@@ -252,6 +252,7 @@ func (s *Service) checkHttp(record bool) *Service {
 
 // recordSuccess will create a new 'hit' record in the database for a successful/online service
 func recordSuccess(s *Service) {
+	s.UpdateNotify = CoreApp.UpdateNotify.Bool
 	s.LastOnline = utils.Timezoner(time.Now().UTC(), CoreApp.Timezone)
 	hit := &types.Hit{
 		Service:   s.Id,
@@ -264,10 +265,12 @@ func recordSuccess(s *Service) {
 	notifier.OnSuccess(s.Service)
 	s.Online = true
 	s.SuccessNotified = true
+	s.CurrentFailureCount = 0
 }
 
 // recordFailure will create a new 'Failure' record in the database for a offline service
 func recordFailure(s *Service, issue string) {
+	s.UpdateNotify = CoreApp.UpdateNotify.Bool
 	fail := &Failure{&types.Failure{
 		Service:   s.Id,
 		Issue:     issue,
@@ -279,7 +282,9 @@ func recordFailure(s *Service, issue string) {
 	s.CreateFailure(fail)
 	s.Online = false
 	s.SuccessNotified = false
-	s.UpdateNotify = CoreApp.UpdateNotify.Bool
 	s.DownText = s.DowntimeText()
-	notifier.OnFailure(s.Service, fail.Failure)
+	s.CurrentFailureCount++
+	if s.CurrentFailureCount >= s.FailureThreshold {
+		notifier.OnFailure(s.Service, fail.Failure)
+	}
 }
