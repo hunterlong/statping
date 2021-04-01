@@ -12,7 +12,7 @@ func Example(online bool) Service {
 		Name:                "Statping Example",
 		Domain:              "https://statping.com",
 		Expected:            null.NewNullString(""),
-		ExpectedStatus:      200,
+		ExpectedStatus:      &[]int{200}[0],
 		Interval:            int(time.Duration(15 * time.Second).Seconds()),
 		Type:                "http",
 		Method:              "get",
@@ -63,7 +63,7 @@ func Samples() error {
 	s1 := &Service{
 		Name:           "Google",
 		Domain:         "https://google.com",
-		ExpectedStatus: 200,
+		ExpectedStatus: &[]int{200}[0],
 		Interval:       10,
 		Type:           "http",
 		Method:         "GET",
@@ -84,7 +84,7 @@ func Samples() error {
 	s2 := &Service{
 		Name:           "Statping Github",
 		Domain:         "https://github.com/statping/statping",
-		ExpectedStatus: 200,
+		ExpectedStatus: &[]int{200}[0],
 		Interval:       30,
 		Type:           "http",
 		Method:         "GET",
@@ -103,7 +103,7 @@ func Samples() error {
 	s3 := &Service{
 		Name:           "JSON Users Test",
 		Domain:         "https://jsonplaceholder.typicode.com/users",
-		ExpectedStatus: 200,
+		ExpectedStatus: &[]int{200}[0],
 		Interval:       60,
 		Type:           "http",
 		Method:         "GET",
@@ -122,7 +122,7 @@ func Samples() error {
 	s4 := &Service{
 		Name:           "JSON API Tester",
 		Domain:         "https://jsonplaceholder.typicode.com/posts",
-		ExpectedStatus: 201,
+		ExpectedStatus: &[]int{201}[0],
 		Expected:       null.NewNullString(`(title)": "((\\"|[statping])*)"`),
 		Interval:       30,
 		Type:           "http",

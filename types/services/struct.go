@@ -16,7 +16,7 @@ type Service struct {
 	Name                string                `gorm:"column:name" json:"name" yaml:"name"`
 	Domain              string                `gorm:"column:domain" json:"domain" yaml:"domain" private:"true" scope:"user,admin"`
 	Expected            null.NullString       `gorm:"column:expected" json:"expected" yaml:"expected" scope:"user,admin"`
-	ExpectedStatus      int                   `gorm:"default:200;column:expected_status" json:"expected_status" yaml:"expected_status" scope:"user,admin"`
+	ExpectedStatus      *int                  `gorm:"column:expected_status" json:"expected_status" yaml:"expected_status" scope:"user,admin"`
 	Interval            int                   `gorm:"default:30;column:check_interval" json:"check_interval" yaml:"check_interval"`
 	Type                string                `gorm:"column:check_type" json:"type" scope:"user,admin" yaml:"type"`
 	Method              string                `gorm:"column:method" json:"method" scope:"user,admin" yaml:"method"`
@@ -26,6 +26,10 @@ type Service struct {
 	Order               int                   `gorm:"default:0;column:order_id" json:"order_id" yaml:"order_id"`
 	VerifySSL           null.NullBool         `gorm:"default:false;column:verify_ssl" json:"verify_ssl" scope:"user,admin" yaml:"verify_ssl"`
 	GrpcHealthCheck     null.NullBool         `gorm:"default:false;column:grpc_health_check" json:"grpc_health_check" scope:"user,admin" yaml:"grpc_health_check"`
+	Username            string                `gorm:"column:username" json:"username" yaml:"username" scope:"user,admin"`
+	Password            string                `gorm:"column:password" json:"password" yaml:"password" scope:"user,admin"`
+	CheckCommand        string                `gorm:"column:check_command" json:"check_command" yaml:"check_command" scope:"user,admin"`
+	SshHealthCheck      null.NullBool         `gorm:"default:false;column:ssh_health_check" json:"ssh_health_check" scope:"user,admin" yaml:"ssh_health_check"`
 	Public              null.NullBool         `gorm:"default:true;column:public" json:"public" yaml:"public"`
 	GroupId             int                   `gorm:"default:0;column:group_id" json:"group_id" yaml:"group_id"`
 	TLSCert             null.NullString       `gorm:"column:tls_cert" json:"tls_cert" scope:"user,admin" yaml:"tls_cert"`

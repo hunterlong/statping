@@ -26,7 +26,7 @@ import (
 var example = &Service{
 	Name:           "Example Service",
 	Domain:         "https://statping.com",
-	ExpectedStatus: 200,
+	ExpectedStatus: &[]int{200}[0],
 	Interval:       30,
 	Type:           "http",
 	Method:         "GET",
@@ -237,7 +237,7 @@ func TestServices(t *testing.T) {
 		e := &Service{
 			Name:           "Example HTTP",
 			Domain:         "http://localhost:15000",
-			ExpectedStatus: 200,
+			ExpectedStatus: &[]int{200}[0],
 			Type:           "http",
 			Method:         "GET",
 			Timeout:        5,
@@ -255,7 +255,7 @@ func TestServices(t *testing.T) {
 		e := &Service{
 			Name:           "Example TLS",
 			Domain:         "http://localhost:15001",
-			ExpectedStatus: 200,
+			ExpectedStatus: &[]int{200}[0],
 			Type:           "http",
 			Method:         "GET",
 			Timeout:        5,
@@ -276,7 +276,7 @@ func TestServices(t *testing.T) {
 		e := &Service{
 			Name:           "Example TLS HTTP",
 			Domain:         "https://localhost:15001",
-			ExpectedStatus: 200,
+			ExpectedStatus: &[]int{200}[0],
 			Type:           "http",
 			Method:         "GET",
 			Timeout:        15,
@@ -487,7 +487,7 @@ func TestServices(t *testing.T) {
 		example := &Service{
 			Name:           "Example Service 2",
 			Domain:         "https://slack.statping.com",
-			ExpectedStatus: 200,
+			ExpectedStatus: &[]int{200}[0],
 			Interval:       10,
 			Type:           "http",
 			Method:         "GET",

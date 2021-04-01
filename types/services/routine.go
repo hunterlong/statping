@@ -14,6 +14,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/statping/statping/types/metrics"
+	"golang.org/x/crypto/ssh"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
@@ -58,7 +59,7 @@ CheckLoop:
 }
 
 func parseHost(s *Service) string {
-	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" {
+	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" || s.Type == "ssh" {
 		return s.Domain
 	} else {
 		u, err := url.Parse(s.Domain)
@@ -74,7 +75,7 @@ func dnsCheck(s *Service) (int64, error) {
 	var err error
 	t1 := utils.Now()
 	host := parseHost(s)
-	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" {
+	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" || s.Type == "ssh" {
 		_, err = net.LookupHost(host)
 	} else {
 		_, err = net.LookupIP(host)
@@ -207,9 +208,9 @@ func CheckGrpc(s *Service, record bool) (*Service, error) {
 	s.Online = true
 
 	if s.GrpcHealthCheck.Bool {
-		if s.ExpectedStatus != s.LastStatusCode {
+		if *s.ExpectedStatus != s.LastStatusCode {
 			if record {
-				RecordFailure(s, fmt.Sprintf("GRPC Service: '%s', Status Code: expected '%v', got '%v'", s.Name, s.ExpectedStatus, s.LastStatusCode), "response_code")
+				RecordFailure(s, fmt.Sprintf("GRPC Service: '%s', Status Code: expected '%v', got '%v'", s.Name, *s.ExpectedStatus, s.LastStatusCode), "response_code")
 			}
 			return s, nil
 		}
@@ -380,9 +381,9 @@ func CheckHttp(s *Service, record bool) (*Service, error) {
 			return s, err
 		}
 	}
-	if s.ExpectedStatus != res.StatusCode {
+	if *s.ExpectedStatus != res.StatusCode {
 		if record {
-			RecordFailure(s, fmt.Sprintf("HTTP Status Code %v did not match %v", res.StatusCode, s.ExpectedStatus), "status_code")
+			RecordFailure(s, fmt.Sprintf("HTTP Status Code %v did not match %v", res.StatusCode, *s.ExpectedStatus), "status_code")
 		}
 		return s, err
 	}
@@ -391,6 +392,97 @@ func CheckHttp(s *Service, record bool) (*Service, error) {
 	}
 	s.Online = true
 	return s, err
+}
+
+// CheckSsh will check a SSH service
+func CheckSsh(s *Service, record bool) (*Service, error) {
+	defer s.updateLastCheck()
+	timer := prometheus.NewTimer(metrics.ServiceTimer(s.Name))
+	defer timer.ObserveDuration()
+
+	dnsLookup, err := dnsCheck(s)
+	if err != nil {
+		if record {
+			RecordFailure(s, fmt.Sprintf("Could not get IP address for SSH service %v, %v", s.Domain, err), "lookup")
+		}
+		return s, err
+	}
+	s.PingTime = dnsLookup
+	t1 := utils.Now()
+	domain := fmt.Sprintf("%v", s.Domain)
+	if s.Port != 0 {
+		domain = fmt.Sprintf("%v:%v", s.Domain, s.Port)
+		if isIPv6(s.Domain) {
+			domain = fmt.Sprintf("[%v]:%v", s.Domain, s.Port)
+		}
+	}
+
+	sshConfig := &ssh.ClientConfig{
+		User:            s.Username,
+		Auth:            []ssh.AuthMethod{ssh.Password(s.Password)},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         time.Duration(s.Timeout) * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", domain, sshConfig)
+	if err != nil {
+		if record {
+			RecordFailure(s, fmt.Sprintf("Dial Error: %v", err), "ssh")
+		}
+		return s, err
+	}
+
+	defer client.Close()
+
+	session, err := client.NewSession()
+	if err != nil {
+		if record {
+			RecordFailure(s, fmt.Sprintf("Failed to create SSH session: %v", err), "ssh")
+		}
+		return s, err
+	}
+
+	if s.SshHealthCheck.Bool {
+		output, err := session.Output(s.CheckCommand)
+		if err != nil {
+			if exitError, ok := err.(*ssh.ExitError); ok {
+				s.LastStatusCode = exitError.Waitmsg.ExitStatus()
+			} else {
+				if record {
+					RecordFailure(s, fmt.Sprintf("Failed to execute check command: %v", err), "ssh")
+					return s, err
+				}
+			}
+		}
+
+		s.LastResponse = strings.TrimSpace(string(output))
+	}
+
+	s.Latency = utils.Now().Sub(t1).Microseconds()
+	s.Online = true
+
+	if s.SshHealthCheck.Bool {
+		if *s.ExpectedStatus != s.LastStatusCode {
+			if record {
+				RecordFailure(s, fmt.Sprintf("SSH Service: '%s', Exit Code: expected '%v', got '%v'", s.Name, *s.ExpectedStatus, s.LastStatusCode), "response_code")
+			}
+			return s, nil
+		}
+
+		if s.Expected.String != s.LastResponse {
+			log.Warnln(fmt.Sprintf("SSH Service: '%s', Command output: expected '%v', got '%v'", s.Name, s.Expected.String, s.LastResponse))
+			if record {
+				RecordFailure(s, fmt.Sprintf("SSH Command output '%v' did not match '%v'", s.LastResponse, s.Expected.String), "response_body")
+			}
+			return s, nil
+		}
+	}
+
+	if record {
+		RecordSuccess(s)
+	}
+
+	return s, nil
 }
 
 // RecordSuccess will create a new 'hit' record in the database for a successful/online service
@@ -460,5 +552,7 @@ func (s *Service) CheckService(record bool) {
 		CheckGrpc(s, record)
 	case "icmp":
 		CheckIcmp(s, record)
+	case "ssh":
+		CheckSsh(s, record)
 	}
 }
