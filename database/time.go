@@ -36,7 +36,7 @@ func (it *Db) SelectByTime(increment time.Duration) string {
 	case "mysql":
 		return fmt.Sprintf("FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(created_at) / %d) * %d) AS timeframe", seconds, seconds)
 	case "postgres":
-		return fmt.Sprintf("date_trunc('minute', created_at) - (CAST(EXTRACT(MINUTE FROM created_at) AS integer) %% %d) * interval '1 minute' AS timeframe", seconds)
+		return fmt.Sprintf("date_trunc('minute', created_at) - (CAST(EXTRACT(MINUTE FROM created_at) AS integer) %% %d) * interval '1 minute' AS timeframe", int64(increment.Minutes()))
 	default:
 		return fmt.Sprintf("datetime((strftime('%%s', created_at) / %d) * %d, 'unixepoch') as timeframe", seconds, seconds)
 	}
