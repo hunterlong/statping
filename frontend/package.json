@@ -20,7 +20,7 @@
     "@fortawesome/free-solid-svg-icons": "^5.12.0",
     "@fortawesome/vue-fontawesome": "^0.1.9",
     "apexcharts": "^3.23.0",
-    "axios": "^0.19.1",
+    "axios": "^0.21.1",
     "codemirror-colorpicker": "^1.9.66",
     "core-js": "^3.6.5",
     "date-fns": "^2.9.0",
