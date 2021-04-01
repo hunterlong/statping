@@ -19,6 +19,8 @@
                     <option value="udp">UDP {{ $t('service') }}</option>
                     <option value="icmp">ICMP Ping</option>
                     <option value="grpc">gRPC {{ $t('service') }}</option>
+                    <option value="smtp">SMTP {{ $t('service') }}</option>
+                    <option value="imap">IMAP {{ $t('service') }}</option>
                     <option value="static">Static {{ $t('service') }}</option>
                 </select>
                 <small class="form-text text-muted">Use HTTP if you are checking a website or use TCP if you are checking a server</small>
@@ -88,6 +90,12 @@
                     <input v-model.number="service.port" type="number" name="port" class="form-control" id="service_port" placeholder="8080">
                 </div>
             </div>
+            <div v-if="service.type.match(/^(smtp|imap)$/)" class="form-group row">
+                <label class="col-sm-4 col-form-label">Port</label>
+                <div class="col-sm-8">
+                    <input v-model.number="service.port" type="number" name="port" class="form-control" id="service_port" placeholder="587">
+                </div>
+            </div>
 
             <div v-if="service.type.match(/^(http)$/)" class="form-group row">
                 <label class="col-sm-4 col-form-label">{{ $t('service_check') }}</label>
@@ -131,6 +139,13 @@
                 <small class="form-text text-muted">Comma delimited list of HTTP Headers (KEY=VALUE,KEY=VALUE)</small>
             </div>
         </div>
+        <div v-if="service.type.match(/^(smtp|imap)$/)" class="form-group row">
+            <label class="col-sm-4 col-form-label">Credentials</label>
+            <div class="col-sm-8">
+                <input v-model="service.headers" class="form-control" autocapitalize="none" spellcheck="false" placeholder='Username=user@domain.com,Password=secretpassword'>
+                <small class="form-text text-muted">Comma delimited list of IMAP/SMTP credentials (Username=user@domain.com,Password=secretpassword)</small>
+            </div>
+        </div>
         <div v-if="service.type.match(/^(http)$/)" class="form-group row">
             <label class="col-sm-4 col-form-label">{{ $t('expected_resp') }} (Regex)</label>
             <div class="col-sm-8">
@@ -155,7 +170,7 @@
                 </span>
             </div>
         </div>
-        <div v-if="service.type.match(/^(http|grpc)$/)" class="form-group row">
+        <div v-if="service.type.match(/^(http|grpc|smtp|imap)$/)" class="form-group row">
             <label class="col-12 col-md-4 col-form-label">{{ $t('verify_ssl') }}</label>
             <div class="col-12 col-md-8 mt-1 mb-2 mb-md-0">
                 <span @click="service.verify_ssl = !!service.verify_ssl" class="switch float-left">
@@ -193,7 +208,7 @@
             </div>
         </div>
 
-        <div v-if="service.type.match(/^(tcp|http)$/)" class="form-group row">
+        <div v-if="service.type.match(/^(tcp|smtp|imap|http)$/)" class="form-group row">
             <label class="col-12 col-md-4 col-form-label">{{ $t('tls_cert') }}</label>
             <div class="col-12 col-md-8 mt-1 mb-2 mb-md-0">
                 <span @click="use_tls = !!use_tls" class="switch float-left">

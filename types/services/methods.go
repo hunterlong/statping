@@ -6,27 +6,29 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"sort"
+	"strconv"
+	"time"
+
 	"github.com/statping/statping/types"
 	"github.com/statping/statping/types/errors"
 	"github.com/statping/statping/types/failures"
 	"github.com/statping/statping/types/hits"
 	"github.com/statping/statping/utils"
-	"io/ioutil"
-	"sort"
-	"strconv"
-	"time"
 )
 
 const limitedFailures = 25
 
-func (s *Service) LoadTLSCert() (*tls.Config, error) {
+func (s *Service) LoadTLSCert() (config *tls.Config, err error) {
+	config, err = s.configureTLS()
 	if s.TLSCert.String == "" || s.TLSCertKey.String == "" {
-		return nil, nil
+		return
 	}
 
 	// load TLS cert and key from file path or PEM format
 	var cert tls.Certificate
-	var err error
+
 	tlsCertExtension := utils.FileExtension(s.TLSCert.String)
 	tlsCertKeyExtension := utils.FileExtension(s.TLSCertKey.String)
 	if tlsCertExtension == "" && tlsCertKeyExtension == "" {
@@ -38,13 +40,14 @@ func (s *Service) LoadTLSCert() (*tls.Config, error) {
 		return nil, errors.Wrap(err, "issue loading X509KeyPair")
 	}
 
-	config := &tls.Config{
-		Certificates:       []tls.Certificate{cert},
-		InsecureSkipVerify: s.TLSCertRoot.String == "",
+	if config == nil {
+		config = &tls.Config{}
 	}
+	config.Certificates = []tls.Certificate{cert}
+	config.InsecureSkipVerify = config.InsecureSkipVerify || s.TLSCertRoot.String == ""
 
 	if s.TLSCertRoot.String == "" {
-		return config, nil
+		return
 	}
 
 	// create Root CA pool or use Root CA provided
@@ -58,7 +61,23 @@ func (s *Service) LoadTLSCert() (*tls.Config, error) {
 
 	config.RootCAs = caCertPool
 
-	return config, nil
+	return
+}
+
+func (s Service) configureTLS() (config *tls.Config, err error) {
+	if !s.requiresTLS() {
+		return nil, nil
+	}
+	config = &tls.Config{
+		ServerName:         s.Domain,
+		InsecureSkipVerify: false,
+	}
+
+	return
+}
+
+func (s Service) requiresTLS() bool {
+	return s.VerifySSL.Bool || ((s.Type == "smtp" || s.Type == "imap") && (s.Port == 465 || s.Port == 587 || s.Port == 993))
 }
 
 func (s Service) Duration() time.Duration {

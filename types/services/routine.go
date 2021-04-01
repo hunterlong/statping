@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/smtp"
 	"net/url"
 	"regexp"
 	"strings"
@@ -17,6 +19,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/emersion/go-imap/client"
 	"github.com/statping/statping/types/failures"
 	"github.com/statping/statping/types/hits"
 	"github.com/statping/statping/utils"
@@ -58,7 +61,7 @@ CheckLoop:
 }
 
 func parseHost(s *Service) string {
-	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" {
+	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" || s.Type == "smtp" || s.Type == "imap" {
 		return s.Domain
 	} else {
 		u, err := url.Parse(s.Domain)
@@ -74,7 +77,7 @@ func dnsCheck(s *Service) (int64, error) {
 	var err error
 	t1 := utils.Now()
 	host := parseHost(s)
-	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" {
+	if s.Type == "tcp" || s.Type == "udp" || s.Type == "grpc" || s.Type == "smtp" {
 		_, err = net.LookupHost(host)
 	} else {
 		_, err = net.LookupIP(host)
@@ -293,6 +296,222 @@ func CheckTcp(s *Service, record bool) (*Service, error) {
 	return s, nil
 }
 
+// checkSmtp will check an SMTP service
+func CheckSmtp(s *Service, record bool) (*Service, error) {
+	defer s.updateLastCheck()
+	timer := prometheus.NewTimer(metrics.ServiceTimer(s.Name))
+	defer timer.ObserveDuration()
+
+	dnsLookup, err := dnsCheck(s)
+	if err != nil {
+		if record {
+			RecordFailure(s, fmt.Sprintf("Could not get IP address for %s service %v, %v", strings.ToUpper(s.Type), s.Domain, err), "lookup")
+		}
+		return s, err
+	}
+	s.PingTime = dnsLookup
+	t1 := utils.Now()
+	domain := fmt.Sprintf("%v", s.Domain)
+	if s.Port != 0 {
+		domain = fmt.Sprintf("%v:%v", s.Domain, s.Port)
+		if isIPv6(s.Domain) {
+			domain = fmt.Sprintf("[%v]:%v", s.Domain, s.Port)
+		}
+	}
+
+	tlsConfig, err := s.LoadTLSCert()
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	var c *smtp.Client
+	var headers []string
+	var username, password string
+	if s.Headers.Valid {
+		headers = strings.Split(s.Headers.String, ",")
+	} else {
+		headers = nil
+	}
+
+	// check if 'Content-Type' header was defined
+	for _, header := range headers {
+		switch strings.ToLower(strings.Split(header, "=")[0]) {
+		case "username":
+			username = strings.Split(header, "=")[1]
+		case "password":
+			password = strings.Split(header, "=")[1]
+		}
+	}
+
+	if s.requiresTLS() || s.TLSCert.String != "" {
+		// test TCP connection if TLS Certificate was set
+		dialer := &net.Dialer{
+			KeepAlive: time.Duration(s.Timeout) * time.Second,
+			Timeout:   time.Duration(s.Timeout) * time.Second,
+		}
+		conn, err := tls.DialWithDialer(dialer, "tcp", domain, tlsConfig)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("Dial Error: %v", err), "tls")
+			}
+			return s, err
+		}
+		defer conn.Close()
+		c, err = smtp.NewClient(conn, s.Domain)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Connection Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+	} else {
+		// test TCP connection if there is no TLS Certificate set
+		conn, err := net.DialTimeout("tcp", domain, time.Duration(s.Timeout)*time.Second)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("Dial Error: %v", err), "tls")
+			}
+			return s, err
+		}
+		defer conn.Close()
+		c, err = smtp.NewClient(conn, s.Domain)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Connection Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+	}
+
+	// Auth
+	if s.Port != 25 {
+		if username == "" || password == "" {
+			err = errors.New("no credentials configured")
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Authentication Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+
+		if err = c.Auth(smtp.PlainAuth("", username, password, s.Domain)); err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Authentication Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+	}
+
+	s.Latency = utils.Now().Sub(t1).Microseconds()
+	s.LastResponse = ""
+	s.Online = true
+	if record {
+		RecordSuccess(s)
+	}
+	return s, nil
+}
+
+func CheckImap(s *Service, record bool) (*Service, error) {
+	defer s.updateLastCheck()
+	timer := prometheus.NewTimer(metrics.ServiceTimer(s.Name))
+	defer timer.ObserveDuration()
+
+	dnsLookup, err := dnsCheck(s)
+	if err != nil {
+		if record {
+			RecordFailure(s, fmt.Sprintf("Could not get IP address for %s service %v, %v", strings.ToUpper(s.Type), s.Domain, err), "lookup")
+		}
+		return s, err
+	}
+	s.PingTime = dnsLookup
+	t1 := utils.Now()
+	domain := fmt.Sprintf("%v", s.Domain)
+	if s.Port != 0 {
+		domain = fmt.Sprintf("%v:%v", s.Domain, s.Port)
+		if isIPv6(s.Domain) {
+			domain = fmt.Sprintf("[%v]:%v", s.Domain, s.Port)
+		}
+	}
+
+	tlsConfig, err := s.LoadTLSCert()
+	if err != nil {
+		log.Errorln(err)
+	}
+
+	var headers []string
+	var username, password string
+	if s.Headers.Valid {
+		headers = strings.Split(s.Headers.String, ",")
+	} else {
+		headers = nil
+	}
+
+	// check if 'Content-Type' header was defined
+	for _, header := range headers {
+		switch strings.ToLower(strings.Split(header, "=")[0]) {
+		case "username":
+			username = strings.Split(header, "=")[1]
+		case "password":
+			password = strings.Split(header, "=")[1]
+		}
+	}
+
+	var conn *client.Client
+	if s.requiresTLS() || s.TLSCert.String != "" {
+		// test TCP connection if TLS Certificate was set
+		dialer := &net.Dialer{
+			KeepAlive: time.Duration(s.Timeout) * time.Second,
+			Timeout:   time.Duration(s.Timeout) * time.Second,
+		}
+		conn, err = client.DialWithDialerTLS(dialer, domain, tlsConfig)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("Dial Error: %v", err), "tls")
+			}
+			return s, err
+		}
+	} else {
+		// test TCP connection if there is no TLS Certificate set
+		dialer := &net.Dialer{
+			KeepAlive: time.Duration(s.Timeout) * time.Second,
+			Timeout:   time.Duration(s.Timeout) * time.Second,
+		}
+		conn, err = client.DialWithDialer(dialer, domain)
+		if err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("Dial Error: %v", err), "tls")
+			}
+			return s, err
+		}
+	}
+	defer conn.Logout()
+
+	// Auth
+	if s.Port != 143 {
+		if username == "" || password == "" {
+			err = errors.New("no credentials configured")
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Authentication Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+
+		if err = conn.Login(username, password); err != nil {
+			if record {
+				RecordFailure(s, fmt.Sprintf("%s Authentication Error: %v", strings.ToUpper(s.Type), err), s.Type)
+			}
+			return s, err
+		}
+	}
+
+	s.Latency = utils.Now().Sub(t1).Microseconds()
+	s.LastResponse = ""
+	s.Online = true
+	if record {
+		RecordSuccess(s)
+	}
+	return s, nil
+}
+
 func (s *Service) updateLastCheck() {
 	s.LastCheck = time.Now()
 }
@@ -460,5 +679,9 @@ func (s *Service) CheckService(record bool) {
 		CheckGrpc(s, record)
 	case "icmp":
 		CheckIcmp(s, record)
+	case "smtp":
+		CheckSmtp(s, record)
+	case "imap":
+		CheckImap(s, record)
 	}
 }

@@ -7,6 +7,8 @@ require (
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/aws/aws-sdk-go v1.30.20
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
+	github.com/emersion/go-imap v1.0.6
+	github.com/emersion/go-sasl v0.0.0-20200509203442-7bfe0ed36a21 // indirect
 	github.com/fatih/structs v1.1.0
 	github.com/foomo/simplecert v1.7.5
 	github.com/foomo/tlsconfig v0.0.0-20180418120404-b67861b076c9
@@ -32,7 +34,7 @@ require (
 	golang.org/x/mod v0.3.1-0.20200828183125-ce943fd02449 // indirect
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73 // indirect
 	golang.org/x/oauth2 v0.0.0-20200107190931-bf48bf16ab8d
-	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/text v0.3.5 // indirect
 	golang.org/x/tools v0.0.0-20201012192620-5bd05386311b // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/grpc v1.28.1
