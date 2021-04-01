@@ -3,16 +3,17 @@ package notifiers
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/statping/statping/types/failures"
 	"github.com/statping/statping/types/notifications"
 	"github.com/statping/statping/types/notifier"
 	"github.com/statping/statping/types/null"
 	"github.com/statping/statping/types/services"
 	"github.com/statping/statping/utils"
-	"io/ioutil"
-	"net/http"
-	"strings"
-	"time"
 )
 
 var _ notifier.Notifier = (*webhooker)(nil)
@@ -25,6 +26,8 @@ type webhooker struct {
 	*notifications.Notification
 }
 
+// Webhook notifier
+// Send a custom HTTP request to a specific URL with your own body, headers, and parameters.
 var Webhook = &webhooker{&notifications.Notification{
 	Method:      webhookMethod,
 	Title:       "Webhook",
@@ -69,7 +72,7 @@ var Webhook = &webhooker{&notifications.Notification{
 
 // Send will send a HTTP Post to the webhooker API. It accepts type: string
 func (w *webhooker) Send(msg interface{}) error {
-	resp, err := w.sendHttpWebhook(msg.(string))
+	resp, err := w.sendHTTPWebhook(msg.(string))
 	if err == nil {
 		resp.Body.Close()
 	}
@@ -84,34 +87,47 @@ func (w *webhooker) Valid(values notifications.Values) error {
 	return nil
 }
 
-func (w *webhooker) sendHttpWebhook(body string) (*http.Response, error) {
+func (w *webhooker) sendHTTPWebhook(body string) (*http.Response, error) {
 	utils.Log.Infoln(fmt.Sprintf("sending body: '%v' to %v as a %v request", body, w.Host.String, w.Var1.String))
 	client := new(http.Client)
 	client.Timeout = 10 * time.Second
 	req, err := http.NewRequest(w.Var1.String, w.Host.String, bytes.NewBufferString(body))
+
 	if err != nil {
 		return nil, err
 	}
+
 	if w.ApiSecret.String != "" {
-		keyVal := strings.SplitN(w.ApiSecret.String, "=", 2)
-		if len(keyVal) == 2 {
-			if keyVal[0] != "" && keyVal[1] != "" {
-				if strings.ToLower(keyVal[0]) == "host" {
-					req.Host = strings.TrimSpace(keyVal[1])
-				} else {
-					req.Header.Set(keyVal[0], keyVal[1])
-				}
+		headers := strings.Split(w.ApiSecret.String, ",")
+
+		for _, header := range headers {
+			trimmedHeader := strings.TrimSpace(header)
+
+			keyVal := strings.SplitN(trimmedHeader, "=", 2)
+
+			if len(keyVal) != 2 || keyVal[0] == "" || keyVal[1] == "" {
+				continue
+			}
+
+			if strings.ToLower(keyVal[0]) == "host" {
+				req.Host = strings.TrimSpace(keyVal[1])
+			} else {
+				req.Header.Set(keyVal[0], keyVal[1])
 			}
 		}
 	}
+
 	if w.ApiKey.String != "" {
 		req.Header.Add("Content-Type", w.ApiKey.String)
 	} else {
 		req.Header.Add("Content-Type", "application/json")
 	}
+
 	req.Header.Set("User-Agent", "Statping")
 	req.Header.Set("Statping-Version", utils.Params.GetString("VERSION"))
+
 	resp, err := client.Do(req)
+
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +139,7 @@ func (w *webhooker) OnTest() (string, error) {
 	f := failures.Example()
 	s := services.Example(false)
 	body := ReplaceVars(w.SuccessData.String, s, f)
-	resp, err := w.sendHttpWebhook(body)
+	resp, err := w.sendHTTPWebhook(body)
 	if err != nil {
 		return "", err
 	}
@@ -137,7 +153,7 @@ func (w *webhooker) OnTest() (string, error) {
 // OnFailure will trigger failing service
 func (w *webhooker) OnFailure(s services.Service, f failures.Failure) (string, error) {
 	msg := ReplaceVars(w.FailureData.String, s, f)
-	resp, err := w.sendHttpWebhook(msg)
+	resp, err := w.sendHTTPWebhook(msg)
 	if err != nil {
 		return "", err
 	}
@@ -149,7 +165,7 @@ func (w *webhooker) OnFailure(s services.Service, f failures.Failure) (string, e
 // OnSuccess will trigger successful service
 func (w *webhooker) OnSuccess(s services.Service) (string, error) {
 	msg := ReplaceVars(w.SuccessData.String, s, failures.Failure{})
-	resp, err := w.sendHttpWebhook(msg)
+	resp, err := w.sendHTTPWebhook(msg)
 	if err != nil {
 		return "", err
 	}
