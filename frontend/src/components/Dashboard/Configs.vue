@@ -1,7 +1,7 @@
 <template>
 <div>
   <h3>Configuration</h3>
-  For security reasons, all database credentials cannot be editted from this page.
+  For security reasons, all database credentials cannot be edited from this page.
 
   <codemirror v-show="loaded" v-model="configs" ref="configs" :options="cmOptions" class="mt-4 codemirrorInput"/>
 
