@@ -55,7 +55,7 @@ const korean = {
     month: "월",
     day: "일",
     hour: "시간",
-    minute: "분",
+    minute: "분 | 의사록",
     failures_24_hours: "지난 24시간 동안 장애 발생",
     no_services: "현재 서비스가 없습니다!",
     theme: "테마",
