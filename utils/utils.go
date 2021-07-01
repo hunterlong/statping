@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"strconv"
@@ -214,18 +213,10 @@ func HttpRequest(endpoint, method string, contentType interface{}, headers []str
 		TLSHandshakeTimeout:   timeout,
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			// redirect all connections to host specified in url
-			addr = strings.Split(req.URL.Host, ":")[0] + addr[strings.LastIndex(addr, ":"):]
 			return dialer.DialContext(ctx, network, addr)
 		},
 	}
-	if Params.GetString("HTTP_PROXY") != "" {
-		proxyUrl, err := url.Parse(Params.GetString("HTTP_PROXY"))
-		if err != nil {
-			return nil, nil, err
-		}
-		transport.Proxy = http.ProxyURL(proxyUrl)
-	}
+
 	if customTLS != nil {
 		transport.TLSClientConfig.RootCAs = customTLS.RootCAs
 		transport.TLSClientConfig.Certificates = customTLS.Certificates
