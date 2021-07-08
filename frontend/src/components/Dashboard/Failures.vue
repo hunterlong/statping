@@ -56,7 +56,8 @@
                 <th scope="col">Issue</th>
                 <th scope="col">Status Code</th>
                 <th scope="col">Ping</th>
-                <th scope="col">Created</th>
+                <th scope="col">Created (Day)</th>
+                <th scope="col">Created (Hour)</th>
             </tr>
             </thead>
             <tbody>
@@ -65,7 +66,8 @@
                 <td class="font-1">{{failure.issue}}</td>
                 <td class="font-1">{{failure.error_code}}</td>
                 <td class="font-1">{{humanTime(failure.ping)}}</td>
-                <td class="font-1">{{ago(failure.created_at)}}</td>
+                <td class="font-1">{{formatDate(failure.created_at, 'yyyy-MM-dd')}}</td>
+                <td class="font-1">{{formatDate(failure.created_at, 'hh:mm')}}</td>
             </tr>
 
             </tbody>
